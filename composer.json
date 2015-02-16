@@ -1,0 +1,13 @@
+{
+    "name": "blogwerk/polylang-translator",
+    "description": "An translator to translate all social media kit multilang data to polylang",
+    "require": {
+        "zetacomponents/console-tools": "~1.7"
+    },
+    "authors": [
+        {
+            "name": "Matthias Zobrist",
+            "email": "matthias.zobrist@zepi.org"
+        }
+    ]
+}
