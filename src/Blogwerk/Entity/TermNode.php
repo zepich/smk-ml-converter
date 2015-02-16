@@ -51,7 +51,7 @@ class TermNode
    * @param \StdClass $termData
    * @param \Blogwerk\Entity\TermNode $parent
    */
-  public function __construct($termId, \StdClass $termData, TermNode $parent)
+  public function __construct($termId, \StdClass $termData, TermNode $parent = null)
   {
     $this->_termId = $termId;
     $this->_termData = $termData;
