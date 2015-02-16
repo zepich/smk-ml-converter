@@ -1,0 +1,9 @@
+*.class
+*.pyc
+*.pyo
+.project
+.settings
+.svn
+_svn
+composer.lock
+vendor
