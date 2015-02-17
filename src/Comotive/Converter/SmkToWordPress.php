@@ -99,7 +99,6 @@ class SmkToWordPress
       $this->_oldPrefix . 'sm_msgs_label',
       $this->_oldPrefix . 'sm_pics',
       $this->_oldPrefix . 'sm_msgs_meta',
-      $this->_oldPrefix . 'term_taxonomymeta',
       $this->_oldPrefix . 'wf_action',
       $this->_oldPrefix . 'wf_event',
       $this->_oldPrefix . 'wf_roomitem',

@@ -51,6 +51,11 @@ class Term
   protected $_dryRunCounter = 0;
   
   /**
+   * @var integer
+   */
+  protected $_errorCounter = 0;
+  
+  /**
    * Constructs the object
    * 
    * @param \Blogwerk\CliCore $cliCore
@@ -65,25 +70,10 @@ class Term
   }
   
   /**
-   * This is a filter to manipulate the term query in polylang. We need
-   * all terms and not only the translated.
-   * 
-   * @param array $taxonomies
-   * @return array
-   */
-  public function resetTaxonomiesForPolylang($taxonomies)
-  {
-    return array();
-  }
-  
-  /**
    * Converts terms of all registred taxonomies to multilanguage terms.
    */
   public function convertTermsOfTaxonomies()
   {
-    // Add a filter which will reset all taxonomies to nothing
-    add_filter('pll_get_taxonomies', array($this, 'resetTaxonomiesForPolylang'));
-    
     /**
      * 
      * 1. Get all taxonomies
@@ -91,17 +81,34 @@ class Term
      * 3. Loop trough all taxonomies, get all posts and move the posts to the right new term
      * 
      */
+    
+    // Load the excluded taxonomies from the configuration file
+    $excludedTaxonomiesString = $this->_configuration->get('termsconverter', 'excludedTaxonomies');
+    $excludedTaxonomies = explode(',', $excludedTaxonomiesString);
      
     $taxonomies = get_taxonomies();
     foreach ($taxonomies as $taxonomy) {
-      Output::output('Convert all terms of the taxonomy "' . $taxonomy . '"...', 'info');
+      Output::outputLine();
+      
+      Output::output('Taxonomy: "' . $taxonomy . '"', 'main');
+      
+      if (in_array($taxonomy, $excludedTaxonomies)) {
+        Output::output('The taxonomy "' . $taxonomy . '" is excluded by the configuration file.', 'notice');
+        continue;
+      }
       
       // Convert all terms into multiple translated terms
-      $terms = $this->_convertTaxonomyAndTerms($taxonomy);
+      $termTree = $this->_convertTaxonomyAndTerms($taxonomy);
        
       // Convert all posts to the new terms
-      $this->_convertPosts($taxonomy, $terms);
+      Output::output('Search all posts for all terms and reassign them...', 'info');
+      $this->_bar = Output::startProgressBar(count($termTree));
+      $this->_convertPosts($taxonomy, $termTree);
+      $this->_bar->finish();
+      Output::outputLine();
     }
+
+    Output::outputLine();
   }
   
   /**
@@ -113,23 +120,73 @@ class Term
   protected function _convertTaxonomyAndTerms($taxonomy)
   {
     // Get the terms
-    $terms = get_terms($taxonomy, 'hide_empty=0');
+    $terms = $this->_getTerms($taxonomy);
     
-    // Build tree
+    // If we have no terms for the taxonomy we have nothing to do...
+    if (count($terms) == 0) {
+      Output::output('There are no terms for the taxonomy "' . $taxonomy . '".', 'info');
+      return false;
+    }
+    
+    $this->_dryRunCounter = 0;
+    $this->_errorCounter = 0;
+    
+    // Build the term tree tree
     Output::output('Create the term tree...', 'info');
     $this->_bar = Output::startProgressBar(count($terms));
     $tree = $this->_generateTree($terms);
     $this->_bar->finish();
     Output::outputLine();
     
+    // Analyse the counter
+    $this->_analyseErrorCounter($taxonomy, 'generate tree');
+    $this->_analyseDryRunCounter($taxonomy, 'generate tree');
+    
+    // Count all nodes in the term tree
+    $nodeCount = $this->_countTreeNodes($tree);
+
+    // If the tree is empty we have nothing to do for this taxonomy
+    if ($nodeCount == 0) {
+      Output::output('The generated tree for the taxonomy "' . $taxonomy . '" is empty.', 'info');
+      return false;
+    }
+    
     $this->_dryRunCounter = 0;
+    $this->_errorCounter = 0;
     
     // Convert the terms into multilanguage terms
     Output::output('Convert each term into a multilanguage term...', 'info');
-    $this->_bar = Output::startProgressBar(count($terms));
+    $this->_bar = Output::startProgressBar($nodeCount);
     $this->_convertTerms($taxonomy, $tree);
     $this->_bar->finish();
     Output::outputLine();
+    
+    // Analyse the counter
+    $this->_analyseErrorCounter($taxonomy, 'convert terms');
+    $this->_analyseDryRunCounter($taxonomy, 'convert terms');
+    
+    return $tree;
+  }
+  
+  /**
+   * Returns all terms for the given taxonomy
+   * 
+   * @param string $taxonomy
+   * @return array
+   */
+  protected function _getTerms($taxonomy)
+  {
+    $termsTable = $this->_configuration->get('dbconverter', 'newPrefix') . 'terms';
+    $termsTaxonomyTable = $this->_configuration->get('dbconverter', 'newPrefix') . 'term_taxonomy';
+    $query = 'SELECT t.name, t.slug, tt.* '
+         . 'FROM ' . $termsTable . ' AS t '
+         . 'INNER JOIN ' . $termsTaxonomyTable . ' tt '
+         . 'ON t.term_id = tt.term_id '
+         . 'WHERE tt.taxonomy = \'' . $taxonomy . '\' '
+         . 'ORDER BY tt.parent';
+    $data = $this->_pdo->query($query)->fetchAll(\PDO::FETCH_CLASS, 'stdClass');
+    
+    return $data;
   }
   
   /**
@@ -145,13 +202,31 @@ class Term
     $nodes = array();
     
     foreach ($terms as $term) {
+      $termNode = null;
+      
       if ($term->parent == $parent && $term->term_id > 0) {
-        // Create a term node object
-        $termNode = new TermNode($term->term_id, $term, $parentTermNode);
+        // If the term is translated we would search for the term node
+        // of the same term in another language and use this term node.
+        $termLanguage = pll_get_term_language($term->term_id);
+        if ($termLanguage !== false) {
+          $termTranslationData = $this->_pll_get_term_translations($term->term_id);
+          
+          $termNode = $this->_searchExistingTermNode($nodes, $termTranslationData);
+        }
+        
+        // Create a term node object if there is not an term node yet
+        if ($termNode === null || $termNode === false) {
+          $termNode = new TermNode($term->term_id, $term, $parentTermNode);
+        }
         
         // Get the children for this term
         $children = $this->_generateTree($terms, $term->term_id, $termNode);
         $termNode->setChildren($children);
+        
+        // If the term is translated fill the translation information for it
+        if ($termLanguage !== false) {
+          $termNode->addLanguageTermId($termLanguage, $term->term_id);
+        }
         
         // Add the term node to the nodes array
         $nodes[] = $termNode;
@@ -161,6 +236,66 @@ class Term
     }
     
     return $nodes;
+  }
+
+  /**
+   * Returns the array with the translations data for the given term id
+   * 
+   * @param integer $termId
+   * @return array
+   */
+  protected function _pll_get_term_translations($termId)
+  {
+    global $polylang;
+    
+    if (!isset($polylang)) {
+      return array();
+    }
+    
+    return $polylang->get_translations('term', $termId);
+  }
+  
+  /**
+   * Iterates trough all created nodes and searches for one of the 
+   * translated nodes. Returns the found node or false if no node were
+   * found.
+   * 
+   * @param array $nodes
+   * @param array $termTranslationData
+   * @return boolean|TermNode 
+   */
+  protected function _searchExistingTermNode($nodes, $termTranslationData)
+  {
+    foreach ($nodes as $node) {
+      foreach ($termTranslationData as $languageCode => $termId) {
+        if ($node->getTermId() == $termId) {
+          return $node;
+        }
+      }
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Counts all nodes in the term tree and returns the number of nodes
+   * 
+   * @param array $tree
+   * @return integer
+   */
+  protected function _countTreeNodes($tree)
+  {
+    $counter = 0;
+    
+    foreach ($tree as $node) {
+      $counter++;
+      
+      if ($node->hasChildren()) {
+        $counter += $this->_countTreeNodes($node->getChildren());
+      }
+    }
+    
+    return $counter;
   }
   
   /**
@@ -179,23 +314,30 @@ class Term
     foreach ($tree as $node) {
       $translations = $this->_parseSmkTranslationString($node->getTermData()->name);
       
-      // If the name isn't a translated string we do not work with this term
-      if (!$translations) {
-        continue;
-      }
-      
       $languageIdData = array();
       foreach ($translations as $languageCode => $translation) {
+        if ($node->hasLanguageTermId($languageCode)) {
+          continue;
+        }
+        
         // If the translation for this language is empty we use the
         // translation for the default language
         if ($translation == '') {
-          $translation = $translations[$defaultLanguage];
+          $translation = $this->_getBestTranslation($defaultLanguage, $translations);
+        }
+        
+        // If the translation is written the same as in the default language we need
+        // to change the slug for the new term
+        $slug = $this->_searchSlug($node->getTermData()->term_taxonomy_id, $languageCode);
+        if ($slug == '') {
+          $slug = $this->_getBestSlug($defaultLanguage, $translation, $translations, $languageCode, $taxonomy);
         }
 
         // If the language is the default language we update the term
         if ($languageCode === $defaultLanguage) {
           $termId = $node->getTermId();
           
+          // Update the term or count the dry run
           if (!$this->_cliCore->isDryRun()) {
             $result = wp_update_term($termId, $taxonomy, array(
               'name' => $translation
@@ -204,6 +346,7 @@ class Term
             $this->_dryRunCounter++;
           }
         } else {
+          // Get the parent id if the term node has a parent node
           $parentId = null;
           if ($parentTermNode !== null) {
             $parentId = $parentTermNode->getLanguageTermId($languageCode);
@@ -213,11 +356,15 @@ class Term
           if (!$this->_cliCore->isDryRun()) {
             $termData = wp_insert_term($translation, $taxonomy, array(
               'name' => $translation,
+              'slug' => $slug,
               'description' => $node->getTermData()->description,
               'parent' => $parentId
             ));
             
+            // If the function wp_insert_term returned an error,
+            // we need to count the error and use 0 as term id
             if ($termData instanceof \WP_Error) {
+              $this->_errorCounter++;
               $termId = 0;
             } else {
               $termId = $termData['term_id'];
@@ -278,6 +425,195 @@ class Term
       return $translations;
     }
 
-    return false;
+    // Create the array with all the languages manually as fallback
+    foreach (pll_languages_list() as $language) {
+      $translations[$language] = $string;
+    }
+
+    return $translations;
+  }
+  
+  /**
+   * Returns the best available translation for the given default language and available 
+   * translations.
+   * 
+   * @param string $defaultLanguage
+   * @param array $translation
+   * @return string
+   */
+  protected function _getBestTranslation($defaultLanguage, $translations)
+  {
+    if (isset($translations[$defaultLanguage]) && $translations[$defaultLanguage] != '') {
+      return $translations[$defaultLanguage];
+    }
+    
+    foreach ($translations as $languageCode => $translation) {
+      if ($translation != '') {
+        return $translation;
+      }
+    }
+    
+    return 'IMPORT-ERROR - NO TRANSLATION FOUND';
+  }
+  
+  /**
+   * Returns an available slug for the given data
+   * 
+   * @param string $defaultLanguage
+   * @param string $translation
+   * @param array $translations
+   * @param string $languageCode
+   * @param string $taxonomy
+   * @return string
+   */
+  protected function _getBestSlug($defaultLanguage, $translation, $translations, $languageCode, $taxonomy)
+  {
+    $slug = $translation;
+    
+    $bestTranslation = $this->_getBestTranslation($defaultLanguage, $translations);
+    if ($bestTranslation === $translation) {
+      $slug = $translation . '-' . $languageCode;
+    }
+    
+    if (term_exists($slug, $taxonomy)) {
+      $slug .= '-' . time();
+    }
+    
+    return $slug;
+  }
+  
+  /**
+   * Returns the slug for the given term taxonomy id and language code
+   * 
+   * @param integer $termTaxonomyId
+   * @param string $languageCode
+   * @return string
+   */
+  protected function _searchSlug($termTaxonomyId, $languageCode)
+  {
+    $termTaxonomyMetaTable = $this->_configuration->get('dbconverter', 'oldPrefix') . 'term_taxonomymeta';
+    $query = 'SELECT meta_value '
+         . 'FROM ' . $termTaxonomyMetaTable . ' '
+         . 'WHERE term_taxonomy_id = \'' . $termTaxonomyId . '\' '
+         . 'AND meta_key = \'translated_slug_' . $languageCode . '\'';
+    $data = $this->_pdo->query($query)->fetch();
+    
+    if (count($data) === 0) {
+      return '';
+    }
+
+    return $data['meta_value'];
+  }
+  
+  /**
+   * Iterates trough the whole term tree. The function will then
+   * load the posts for each term. The old term of each post will
+   * be removed and the translated term will be added to the 
+   * post.
+   * 
+   * @param string $taxonomy
+   * @param array $tree
+   */
+  protected function _convertPosts($taxonomy, $tree)
+  {
+    foreach ($tree as $node) {
+      $postIds = $this->_getPostsForTermId($taxonomy, $node->getTermData()->term_id);
+      
+      // Increase the number of items in the progressbar
+      $this->_bar->increaseMaximum(count($postIds));
+      
+      foreach ($postIds as $postId) {
+        $postLanguage = pll_get_post_language($postId);
+        $oldTermId = intval($node->getTermData()->term_id);
+        $newTermId = $node->getLanguageTermId($postLanguage);
+        
+        if ($newTermId !== false && $newTermId != $oldTermId && !has_term($newTermId, $taxonomy, $postId)) {
+          // Remove the old term
+          wp_remove_object_terms($postId, $oldTermId, $taxonomy);
+          
+          // Add the new term
+          wp_add_object_terms($postId, $newTermId, $taxonomy);
+        }
+        
+        $this->_bar->advance();
+      }
+      
+      // Iterate trough the children - if the node has any chlidren
+      if ($node->hasChildren()) {
+        $this->_convertPosts($taxonomy, $node->getChildren());
+      }
+      
+      $this->_bar->advance();
+    }
+  }
+  
+  /**
+   * Returns an array with all post ids for the given
+   * taxonomy and term id
+   * 
+   * @param string $taxonomy
+   * @param integer $termId
+   * @return array
+   */
+  protected function _getPostsForTermId($taxonomy, $termId)
+  {
+    global $post;
+    
+    $args = array(
+      'post_type' => 'any',
+      'posts_per_page' => -1,
+      'tax_query' => array(
+        array(
+          'taxonomy' => $taxonomy,
+          'field'    => 'id',
+          'terms'    => $termId,
+        ),
+      ),
+    );
+    $query = new \WP_Query($args);
+    
+    // If there are no posts available we return an empty array
+    if (!$query->have_posts()) {
+      return array();
+    }
+    
+    // Get all the post ids
+    $postIds = array();
+    while ($query->have_posts()) {
+      $query->the_post();
+      
+      $postIds[] = $post->ID;
+    }
+    
+    // Destroy the query and the used space
+    unset($query);
+    
+    return $postIds;
+  }
+  
+  /**
+   * Displays the error counter if the error counter is higher than zero.
+   * 
+   * @param string $taxonomy
+   * @param string $action
+   */
+  protected function _analyseErrorCounter($taxonomy, $action)
+  {
+    if ($this->_errorCounter > 0) {
+      Output::output('Taxonomy "' . $taxonomy . '": A total of ' . $this->_errorCounter . ' errors happend while we executed the action "' . $action . '".', 'error');
+    }
+  }
+  
+  /**
+   * Analyses the dry run counter and displays it if needed
+   * 
+   * @param string $taxonomy
+   * @param string $action
+   */
+  protected function _analyseDryRunCounter($taxonomy, $action)
+  {
+    if ($this->_dryRunCounter > 0) {
+      Output::output('Taxonomy "' . $taxonomy . '": ' . $this->_dryRunCounter . ' actions for "' . $action . '" were not executed because of the dry mode.', 'error');
+    }
   }
 }

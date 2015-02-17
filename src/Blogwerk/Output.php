@@ -64,7 +64,8 @@ class Output
   {
     self::initializeEczConsoleOutput();
     
-    $bar = new \ezcConsoleProgressbar(self::$_eczConsoleOutput, $numberOfEntries);
+    //$bar = new \ezcConsoleProgressbar(self::$_eczConsoleOutput, $numberOfEntries);
+    $bar = new \zepi\ConsoleTools\Progressbar(self::$_eczConsoleOutput, $numberOfEntries);
     
     return $bar;
   }
@@ -83,6 +84,7 @@ class Output
       self::$_eczConsoleOutput->formats->error->color = 'red';
       self::$_eczConsoleOutput->formats->dry->color = 'yellow';
       self::$_eczConsoleOutput->formats->main->color = 'green';
+      self::$_eczConsoleOutput->formats->notice->color = 'cyan';
       self::$_eczConsoleOutput->options->autobreak    = 100;
     }
   }

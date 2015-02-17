@@ -123,6 +123,18 @@ class TermNode
   }
   
   /**
+   * Returns true if the term node has a term id for the given
+   * language code
+   * 
+   * @param string $languageCode
+   * @return boolean
+   */
+  public function hasLanguageTermId($languageCode)
+  {
+    return (isset($this->_languageTermIds[$languageCode]));
+  }
+  
+  /**
    * Adds a language and term id combination to the term 
    * node.
    * 

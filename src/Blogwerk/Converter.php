@@ -225,9 +225,9 @@ class Converter
   protected function _getSmkConverter()
   {
     if ($this->_smkConverter === null) {
-      $oldPrefix = $this->_configuration->get('dbconvertor', 'oldPrefix');
-      $newPrefix = $this->_configuration->get('dbconvertor', 'newPrefix');
-      $userPrefix = $this->_configuration->get('dbconvertor', 'userPrefix');
+      $oldPrefix = $this->_configuration->get('dbconverter', 'oldPrefix');
+      $newPrefix = $this->_configuration->get('dbconverter', 'newPrefix');
+      $userPrefix = $this->_configuration->get('dbconverter', 'userPrefix');
       
       $this->_smkConverter = new \Comotive\Converter\SmkToWordPress(
         $this->_getDatabaseConnection(), 

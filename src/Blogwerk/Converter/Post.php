@@ -133,8 +133,8 @@ class Post
   protected function _getTranslationData()
   {
     // Load the raw translation data from the database
-    $translationTable = $this->_configuration->get('dbconvertor', 'oldPrefix') . 'translations';
-    $postsTable = $this->_configuration->get('dbconvertor', 'newPrefix') . 'posts';
+    $translationTable = $this->_configuration->get('dbconverter', 'oldPrefix') . 'translations';
+    $postsTable = $this->_configuration->get('dbconverter', 'newPrefix') . 'posts';
     $query = 'SELECT t.*, p.post_lang 
               FROM ' . $translationTable . ' as t
               LEFT JOIN ' . $postsTable . ' p ON t.post_id = p.ID';
