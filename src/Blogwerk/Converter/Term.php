@@ -317,6 +317,9 @@ class Term
       $languageIdData = array();
       foreach ($translations as $languageCode => $translation) {
         if ($node->hasLanguageTermId($languageCode)) {
+          $node->addLanguageTermId($languageCode, $node->getTermId());
+          $languageIdData[$languageCode] = $node->getTermId();
+          
           continue;
         }
         
@@ -382,7 +385,6 @@ class Term
         }
         
         $node->addLanguageTermId($languageCode, $termId);
-        
         $languageIdData[$languageCode] = $termId;
       }
       
@@ -411,26 +413,56 @@ class Term
    */
   protected function _parseSmkTranslationString($string)
   {
+    $translations = array();
+    
+    // Create the array with all the languages manually as fallback
+    foreach (pll_languages_list() as $language) {
+      $translations[$language] = false;
+    }
+    
     /**
      * Check if the string is a translated string 
      */
-    $translations = array();
     if (preg_match('#\[(de|fr|it|en)\](.*?)\[/\1\]#', $string)) {
       preg_match_all('#\[(de|fr|it|en)\](.*?)\[/\1\]#', $string, $matches, PREG_SET_ORDER);
     
       foreach ($matches as $match) {
         $translations[$match[1]] = trim($match[2]);
       }
-      
-      return $translations;
     }
-
-    // Create the array with all the languages manually as fallback
-    foreach (pll_languages_list() as $language) {
-      $translations[$language] = $string;
+    
+    // If there are values like false then we need the best available value
+    foreach ($translations as $languageCode => $value) {
+      if ($value === false) {
+        $translations[$languageCode] = $this->_getBestValue($translations, $string);
+      }
     }
 
     return $translations;
+  }
+  
+  /**
+   * Returns the best available value for the translation string
+   * 
+   * @param array $translations
+   * @param string $string
+   * @return string
+   */
+  protected function _getBestValue($translations, $string)
+  {
+    $defaultLanguage = pll_default_language();
+    
+    if (isset($translations[$defaultLanguage]) && $translations[$defaultLanguage] !== false) {
+      return $translations[$defaultLanguage];
+    }
+    
+    foreach ($translations as $language => $value) {
+      if ($value !== false) {
+        return $value;
+      }
+    }
+    
+    return $string;
   }
   
   /**

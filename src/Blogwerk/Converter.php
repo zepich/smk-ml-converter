@@ -192,7 +192,7 @@ class Converter
   protected function _convertPosts()
   {
     $postConverter = new \Blogwerk\Converter\Post($this->_cliCore, $this->_getDatabaseConnection(), $this->_configuration);
-    //$postConverter->convertPosts();
+    $postConverter->convertPosts();
   }
   
   /**
