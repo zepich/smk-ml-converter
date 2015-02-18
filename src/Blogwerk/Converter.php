@@ -147,9 +147,9 @@ class Converter
           . PHP_EOL
           . '  1. Download WordPress and extract the content of WordPress package to a directory.' . PHP_EOL
           . '  2. Create manually a wp-config.php file and insert the required data to connect to the database.' . PHP_EOL
-          . '  3. Reset the admin password with this tool Use the following command: "php converter.php ' . CliCore::MODE_RESET . '"';
+          . '  3. Reset the admin password with this tool Use the following command: "php converter.php ' . CliCore::MODE_RESET . '"' . PHP_EOL;
           
-    Output::output($text, 'main');
+    Output::output($text, 'notice');
   }
   
   /**
@@ -244,7 +244,7 @@ class Converter
           . '  4. Configure the languages in the backend of WordPress. Please add all required languages.' . PHP_EOL
           . '  5. Execute this tool again with the following command "php convert.php ' . CliCore::MODE_CONVERT . '"' . PHP_EOL;
           
-    Output::output($text, 'main');
+    Output::output($text, 'notice');
   }
   
   /**

@@ -64,12 +64,19 @@ class SmkToWordPress
   public function run()
   {
     $this->printLine('Starting migration');
+    
     // Remove smk tables that aren't used anymore
     $this->removeSmkTables();
+    
     // Rename user tables and all wordpress tables
     $this->renameTables();
+    
     // Change user meta prefixes and capabilites
     $this->fixUserCapabilities();
+    
+    // Change the site and home url to the new host
+    $this->modifyOptions();
+    
     // Remove spam from comments
     $this->removeSpam();
     $this->printLine('Finished migration');
@@ -121,7 +128,7 @@ class SmkToWordPress
   {
     $tables = array(
       $this->_userPrefix . 'users' => $this->_newPrefix . 'users',
-      $this->_userPrefix. 'usermeta' => $this->_newPrefix . 'usermeta',
+      $this->_userPrefix . 'usermeta' => $this->_newPrefix . 'usermeta',
       $this->_oldPrefix . 'comments' => $this->_newPrefix . 'comments',
       $this->_oldPrefix . 'commentmeta' => $this->_newPrefix . 'commentmeta',
       $this->_oldPrefix . 'links' => $this->_newPrefix . 'links',
@@ -258,6 +265,26 @@ class SmkToWordPress
       UPDATE ' . $usermeta . '
       SET meta_key = "' . $newUserDescKey . '"
       WHERE meta_key = "' . $oldUserDescKey . '"
+    ');
+  }
+
+  /**
+   * Updates the options table and writes the new value for
+   * home and site url in it.
+   */
+  protected function modifyOptions()
+  {
+    $this->printLine('Change the site and home url in the options table.');
+    
+    // Define the new value
+    $value = 'http://' . $_SERVER['HTTP_HOST'];
+    
+    // Set the new home and site url
+    $optionsTable = $this->_newPrefix . 'options';
+    $this->_pdo->exec('
+      UPDATE ' . $optionsTable . '
+      SET option_value = "' . $value . '"
+      WHERE option_name IN ("home", "siteurl")
     ');
   }
 
