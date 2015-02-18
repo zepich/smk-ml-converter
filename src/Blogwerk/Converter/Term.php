@@ -92,6 +92,7 @@ class Term
       
       Output::output('Taxonomy: "' . $taxonomy . '"', 'main');
       
+      // If this is a excluded taxonomy we do nothing and continue
       if (in_array($taxonomy, $excludedTaxonomies)) {
         Output::output('The taxonomy "' . $taxonomy . '" is excluded by the configuration file.', 'notice');
         continue;
@@ -100,12 +101,18 @@ class Term
       // Convert all terms into multiple translated terms
       $termTree = $this->_convertTaxonomyAndTerms($taxonomy);
        
+      $this->_resetCounter();
+       
       // Convert all posts to the new terms
       Output::output('Search all posts for all terms and reassign them...', 'info');
       $this->_bar = Output::startProgressBar(count($termTree));
       $this->_convertPosts($taxonomy, $termTree);
       $this->_bar->finish();
       Output::outputLine();
+      
+      // Analyse the counter
+      $this->_analyseErrorCounter($taxonomy, 'convert posts to term');
+      $this->_analyseDryRunCounter($taxonomy, 'convert posts to term');
     }
 
     Output::outputLine();
@@ -128,8 +135,7 @@ class Term
       return false;
     }
     
-    $this->_dryRunCounter = 0;
-    $this->_errorCounter = 0;
+    $this->_resetCounter();
     
     // Build the term tree tree
     Output::output('Create the term tree...', 'info');
@@ -151,8 +157,7 @@ class Term
       return false;
     }
     
-    $this->_dryRunCounter = 0;
-    $this->_errorCounter = 0;
+    $this->_resetCounter();
     
     // Convert the terms into multilanguage terms
     Output::output('Convert each term into a multilanguage term...', 'info');
@@ -316,6 +321,7 @@ class Term
       
       $languageIdData = array();
       foreach ($translations as $languageCode => $translation) {
+        // If the node has the translation for this language we don't need to do anything
         if ($node->hasLanguageTermId($languageCode)) {
           $node->addLanguageTermId($languageCode, $node->getTermId());
           $languageIdData[$languageCode] = $node->getTermId();
@@ -347,6 +353,7 @@ class Term
             ));
           } else {
             $this->_dryRunCounter++;
+            $termId = mt_rand(100, 1000000);
           }
         } else {
           // Get the parent id if the term node has a parent node
@@ -374,6 +381,7 @@ class Term
             }
           } else {
             $this->_dryRunCounter++;
+            $termId = mt_rand(100, 1000000);
           }
         }
         
@@ -561,10 +569,18 @@ class Term
         
         if ($newTermId !== false && $newTermId != $oldTermId && !has_term($newTermId, $taxonomy, $postId)) {
           // Remove the old term
-          wp_remove_object_terms($postId, $oldTermId, $taxonomy);
+          if (!$this->_cliCore->isDryRun()) {
+            wp_remove_object_terms($postId, $oldTermId, $taxonomy);
+          } else {
+            $this->_dryRunCounter++;
+          }
           
           // Add the new term
-          wp_add_object_terms($postId, $newTermId, $taxonomy);
+          if (!$this->_cliCore->isDryRun()) {
+            wp_add_object_terms($postId, $newTermId, $taxonomy);
+          } else {
+            $this->_dryRunCounter++;
+          }
         }
         
         $this->_bar->advance();
@@ -645,7 +661,16 @@ class Term
   protected function _analyseDryRunCounter($taxonomy, $action)
   {
     if ($this->_dryRunCounter > 0) {
-      Output::output('Taxonomy "' . $taxonomy . '": ' . $this->_dryRunCounter . ' actions for "' . $action . '" were not executed because of the dry mode.', 'error');
+      Output::output('Taxonomy "' . $taxonomy . '": ' . $this->_dryRunCounter . ' actions for "' . $action . '" were not executed because of the dry mode.', 'dry');
     }
+  }
+  
+  /**
+   * Resets the counter
+   */
+  protected function _resetCounter()
+  {
+    $this->_dryRunCounter = 0;
+    $this->_errorCounter = 0;
   }
 }

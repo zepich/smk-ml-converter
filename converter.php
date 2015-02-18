@@ -14,12 +14,13 @@ $classLoaderComotive = new SplClassLoader('zepi', __DIR__ . '/src');
 $classLoaderComotive->register();
 
 echo 
-'                                                                             ' . PHP_EOL .
-'  _____ _____ _____    _____ __       _____                     _            ' . PHP_EOL .
-' |   __|     |  |  |  |     |  |     |     |___ ___ _ _ ___ ___| |_ ___ ___  ' . PHP_EOL .
-' |__   | | | |    -|  | | | |  |__   |   --| . |   | | | -_|  _|  _| -_|  _| ' . PHP_EOL .
-' |_____|_|_|_|__|__|  |_|_|_|_____|  |_____|___|_|_|\_/|___|_| |_| |___|_|   ' . PHP_EOL .
-'                                                                             ' . PHP_EOL . PHP_EOL;
+'                                                                               ' . PHP_EOL .
+'   _____ _____ _____    _____ __       _____                     _             ' . PHP_EOL .
+'  |   __|     |  |  |  |     |  |     |     |___ ___ _ _ ___ ___| |_ ___ ___   ' . PHP_EOL .
+'  |__   | | | |    -|  | | | |  |__   |   --| . |   | | | -_|  _|  _| -_|  _|  ' . PHP_EOL .
+'  |_____|_|_|_|__|__|  |_|_|_|_____|  |_____|___|_|_|\_/|___|_| |_| |___|_|    ' . PHP_EOL .
+'                                                                               ' . PHP_EOL . 
+'                       powered by zepi.net & comotive.ch                       ' . PHP_EOL . PHP_EOL;
 
 // Load the core
 $core = new Blogwerk\CliCore();
@@ -28,6 +29,9 @@ $core->declareArguments();
 // Load the configuration
 $configuration = new Blogwerk\Configuration($core);
 $configuration->readFromFile();
+
+// Define the host url as HTTP_HOST
+$_SERVER['HTTP_HOST'] = $configuration->get('wordpress', 'siteUrl');
 
 // Create the converter process controller
 $converter = new Blogwerk\Converter($core, $configuration);

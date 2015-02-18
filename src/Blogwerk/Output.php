@@ -64,8 +64,8 @@ class Output
   {
     self::initializeEczConsoleOutput();
     
-    //$bar = new \ezcConsoleProgressbar(self::$_eczConsoleOutput, $numberOfEntries);
     $bar = new \zepi\ConsoleTools\Progressbar(self::$_eczConsoleOutput, $numberOfEntries);
+    $bar->start();
     
     return $bar;
   }

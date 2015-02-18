@@ -20,6 +20,7 @@ namespace Blogwerk;
 class CliCore
 {
   const MODE_PREPARE = 'prepare';
+  const MODE_RESET = 'reset';
   const MODE_CONVERT = 'convert';
   
   /**
@@ -84,8 +85,8 @@ class CliCore
     $consoleArguments[] = new \ezcConsoleArgument(
       'mode',
       \ezcConsoleInput::TYPE_STRING,
-      'Execution mode, use "' . self::MODE_PREPARE . '" to prepare the database for WordPress or "' . self::MODE_CONVERT . '" to convert the language data',
-      'Execution mode, use "' . self::MODE_PREPARE . '" to prepare the database for WordPress or "' . self::MODE_CONVERT . '" to convert the language data',
+      'Execution mode, use "' . self::MODE_PREPARE . '" to prepare the database for WordPress, "' . self::MODE_RESET . '" to reset the admin login or "' . self::MODE_CONVERT . '" to convert the language data',
+      'Execution mode, use "' . self::MODE_PREPARE . '" to prepare the database for WordPress, "' . self::MODE_RESET . '" to reset the admin login or "' . self::MODE_CONVERT . '" to convert the language data',
       false
     );
     
@@ -140,20 +141,6 @@ class CliCore
     );
     
     /**
-     * Define the http host if this is needed
-     */
-    $httpHostOption = $input->registerOption( 
-      new \ezcConsoleOption( 
-        'hh',
-        'http-host',
-        \ezcConsoleInput::TYPE_STRING,
-        null,
-        false,
-        'Override the http host. This is needed only in special cases.'
-      )
-    );
-    
-    /**
      * Parse the arguments. Displays an error message if something is wrong
      */
     try {
@@ -178,13 +165,6 @@ class CliCore
       exit;
     }
     
-    /**
-     * Verify the help option
-     */
-    if ($httpHostOption->value !== false) {
-      $_SERVER['HTTP_HOST'] = $httpHostOption->value;
-    }
-    
     $this->_configFilePath = $configOption->value;
     $this->_dryRun = $dryOption->value;
     
@@ -199,7 +179,7 @@ class CliCore
     }
     
     $modeArgument = $arguments[0];
-    if (!in_array($modeArgument, array(self::MODE_PREPARE, self::MODE_CONVERT))) {
+    if (!in_array($modeArgument, array(self::MODE_PREPARE, self::MODE_RESET, self::MODE_CONVERT))) {
       echo $input->getHelpText('Translates the Social Media Kit Mutli Language data to Polylang.');
       exit;
     }

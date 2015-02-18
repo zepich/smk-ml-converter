@@ -58,6 +58,7 @@ class Converter
   {
     Output::output('Start the SMK ML Converter...', 'main');
     
+    // Display a hint if the command is executed as dry run
     if ($this->_cliCore->isDryRun()) {
       Output::output('!!! DRY RUN is active. No actions are executed on the database!', 'dry');
     }
@@ -71,6 +72,20 @@ class Converter
       
       // Execute the smk converter to prepare the database
       $this->_executeSmkConverter();
+    } else if ($this->_cliCore->getMode() === CliCore::MODE_RESET) {
+      /**
+       * Reset the admin login
+       */
+      
+      Output::output('Mode: RESET the admin login', 'main');
+      
+      // Verify the WordPress installation
+      Output::output('Verify WordPress...', 'main');
+      $this->_verifyEnvironment(false);
+      
+      // Reset the admin password
+      Output::output('Reset the passwort for the user "admin".', 'main');
+      $this->_resetPassword();
     } else if ($this->_cliCore->getMode() === CliCore::MODE_CONVERT) {
       /**
        * Convert the language data
@@ -80,7 +95,7 @@ class Converter
       
       // Verify the WordPress installation
       Output::output('Verify WordPress & Polylang...', 'main');
-      $this->_verifyEnvironment();
+      $this->_verifyEnvironment(true);
       
       // Translate posts
       Output::output('Converting the posts...', 'main');
@@ -132,18 +147,17 @@ class Converter
           . PHP_EOL
           . '  1. Download WordPress and extract the content of WordPress package to a directory.' . PHP_EOL
           . '  2. Create manually a wp-config.php file and insert the required data to connect to the database.' . PHP_EOL
-          . '  3. Download Polylang from the WordPress plugin repository.' . PHP_EOL
-          . '  4. Extract the content of the Polylang plugin to the WordPress plugins directory.' . PHP_EOL
-          . '  5. Login to WordPress and activate Polylang.' . PHP_EOL
-          . '  6. Configure the languages in the backend of WordPress. Please add all required languages.' . PHP_EOL
-          . '  7. Execute this tool again with the execution mode "' . CliCore::MODE_CONVERT . '".' . PHP_EOL;
+          . '  3. Reset the admin password with this tool Use the following command: "php converter.php ' . CliCore::MODE_RESET . '"';
+          
     Output::output($text, 'main');
   }
   
   /**
    * Verify the WordPress environment
+   * 
+   * @param boolean $validatePolylang
    */
-  protected function _verifyEnvironment()
+  protected function _verifyEnvironment($validatePolylang = false)
   {
     $path = $this->_configuration->get('wordpress', 'pathToRoot');
     
@@ -175,6 +189,11 @@ class Converter
       exit;
     }
     
+    // If we don't have to validate polylang then we need to return here.
+    if (!$validatePolylang) {
+      return true;
+    }
+    
     // Is the Polylang plugin installed and activated?
     include_once(ABSPATH . 'wp-admin/includes/plugin.php');
     if (!is_plugin_active('polylang/polylang.php')) {
@@ -184,6 +203,48 @@ class Converter
 
     // Yeah. WordPress is installed and Polylang is active!
     Output::output('WordPress is loaded and ready to convert the language data.', 'main');
+  }
+
+  /**
+   * Resets the password of the admin user
+   */
+  protected function _resetPassword()
+  {
+    $pdo = $this->_getDatabaseConnection();
+    
+    $usersTable = $this->_configuration->get('dbconverter', 'newPrefix') . 'users';
+    $data = $pdo->query('SELECT ID FROM ' . $usersTable . ' WHERE user_login = "admin" ORDER BY ID ASC LIMIT 0,1')->fetch();
+    
+    // If there is no admin user, we cannot reset the password.
+    if ($data === false) {
+      Output::output('There is no user with the username "admin". We cannot reset the password.', 'error');
+      exit;
+    }
+    
+    // Set the new password for the admin user
+    $pdo->exec(
+      'UPDATE ' . $usersTable . ' SET ' .
+      'user_pass = ' . $pdo->quote(wp_hash_password('Converter2015')) . ' ' .
+      'WHERE ID = ' . $data['ID']
+    );
+    
+    // Output the login data
+    Output::output('The password is changed.', 'notice');
+    Output::outputLine();
+    Output::output('   Username:    admin', 'notice');
+    Output::output('   Password:    Converter2015', 'notice');
+    Output::outputLine();
+    
+    // Output the howto text
+    $text = 'The password is reset for the admin user and you should now be able to login as admin. Please execute this steps manually:' . PHP_EOL
+          . PHP_EOL
+          . '  1. Download Polylang from the WordPress plugin repository.' . PHP_EOL
+          . '  2. Extract the content of the Polylang plugin to the WordPress plugins directory.' . PHP_EOL
+          . '  3. Login to WordPress and activate Polylang.' . PHP_EOL
+          . '  4. Configure the languages in the backend of WordPress. Please add all required languages.' . PHP_EOL
+          . '  5. Execute this tool again with the following command "php convert.php ' . CliCore::MODE_CONVERT . '"' . PHP_EOL;
+          
+    Output::output($text, 'main');
   }
   
   /**
