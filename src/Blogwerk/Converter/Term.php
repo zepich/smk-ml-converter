@@ -74,14 +74,6 @@ class Term
    */
   public function convertTermsOfTaxonomies()
   {
-    /**
-     * 
-     * 1. Get all taxonomies
-     * 2. Translate all terms of each taxonomy (create new terms and save the id's)
-     * 3. Loop trough all taxonomies, get all posts and move the posts to the right new term
-     * 
-     */
-    
     // Load the excluded taxonomies from the configuration file
     $excludedTaxonomiesString = $this->_configuration->get('termsconverter', 'excludedTaxonomies');
     $excludedTaxonomies = explode(',', $excludedTaxonomiesString);
@@ -169,7 +161,7 @@ class Term
     // Analyse the counter
     $this->_analyseErrorCounter($taxonomy, 'convert terms');
     $this->_analyseDryRunCounter($taxonomy, 'convert terms');
-    
+
     return $tree;
   }
   
@@ -221,16 +213,16 @@ class Term
         
         // Create a term node object if there is not an term node yet
         if ($termNode === null || $termNode === false) {
-          $termNode = new TermNode($term->term_id, $term, $parentTermNode);
+          $termNode = new TermNode(intval($term->term_id), $term, $parentTermNode);
         }
         
         // Get the children for this term
-        $children = $this->_generateTree($terms, $term->term_id, $termNode);
+        $children = $this->_generateTree($terms, intval($term->term_id), $termNode);
         $termNode->setChildren($children);
         
         // If the term is translated fill the translation information for it
         if ($termLanguage !== false) {
-          $termNode->addLanguageTermId($termLanguage, $term->term_id);
+          $termNode->addLanguageTermId($termLanguage, intval($term->term_id));
         }
         
         // Add the term node to the nodes array
@@ -318,6 +310,7 @@ class Term
     
     foreach ($tree as $node) {
       $translations = $this->_parseSmkTranslationString($node->getTermData()->name);
+      $mainTermLanguage = $this->_detectMainTermLanguage($node->getTermData()->name, $node->getTermData()->slug, $defaultLanguage);
       
       $languageIdData = array();
       foreach ($translations as $languageCode => $translation) {
@@ -343,12 +336,12 @@ class Term
         }
 
         // If the language is the default language we update the term
-        if ($languageCode === $defaultLanguage) {
+        if ($languageCode === $mainTermLanguage) {
           $termId = $node->getTermId();
           
           // Update the term or count the dry run
           if (!$this->_cliCore->isDryRun()) {
-            $result = wp_update_term($termId, $taxonomy, array(
+            $termData = wp_update_term($termId, $taxonomy, array(
               'name' => $translation
             ));
           } else {
@@ -361,7 +354,7 @@ class Term
           if ($parentTermNode !== null) {
             $parentId = $parentTermNode->getLanguageTermId($languageCode);
           }
-          
+
           // If the language code not is the default language we add a new term
           if (!$this->_cliCore->isDryRun()) {
             $termData = wp_insert_term($translation, $taxonomy, array(
@@ -391,7 +384,7 @@ class Term
         } else {
           $this->_dryRunCounter++;
         }
-        
+
         $node->addLanguageTermId($languageCode, $termId);
         $languageIdData[$languageCode] = $termId;
       }
@@ -419,7 +412,7 @@ class Term
    * @param string $string
    * @return array
    */
-  protected function _parseSmkTranslationString($string)
+  protected function _parseSmkTranslationString($string, $autoFill = true)
   {
     $translations = array();
     
@@ -428,9 +421,7 @@ class Term
       $translations[$language] = false;
     }
     
-    /**
-     * Check if the string is a translated string 
-     */
+    // Parse the string if this is a multilanguage string
     if (preg_match('#\[(de|fr|it|en)\](.*?)\[/\1\]#', $string)) {
       preg_match_all('#\[(de|fr|it|en)\](.*?)\[/\1\]#', $string, $matches, PREG_SET_ORDER);
     
@@ -440,13 +431,51 @@ class Term
     }
     
     // If there are values like false then we need the best available value
-    foreach ($translations as $languageCode => $value) {
-      if ($value === false) {
-        $translations[$languageCode] = $this->_getBestValue($translations, $string);
+    if ($autoFill) {
+      foreach ($translations as $languageCode => $value) {
+        if ($value === false) {
+          $translations[$languageCode] = $this->_getBestValue($translations, $string);
+        }
       }
     }
 
     return $translations;
+  }
+  
+  /**
+   * Returns the main language for the given original string and the available translations
+   * 
+   * @param string $originalString
+   * @param string $originalSlug
+   * @param string $defaultLanguage
+   * @return string
+   */
+  protected function _detectMainTermLanguage($originalString, $originalSlug, $defaultLanguage)
+  {
+    $realTranslations = $this->_parseSmkTranslationString($originalString);
+    $availableLanguages = array();
+    
+    foreach ($realTranslations as $languageCode => $translation) {
+      if ($translation != false) {
+        $availableLanguages[$languageCode] = $translation;
+      }
+    }
+    
+    // If there is only one translation for the term we can use this
+    // language as main term language
+    if (count($availableLanguages) == 1) {
+      return key($availableLanguages);
+    }
+    
+    foreach ($availableLanguages as $languageCode => $translation) {
+      $translatedSlug = sanitize_title($translation);
+      
+      if ($translatedSlug === $originalSlug) {
+        return $languageCode;
+      }
+    }
+    
+    return $defaultLanguage;
   }
   
   /**

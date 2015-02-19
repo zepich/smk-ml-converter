@@ -160,4 +160,14 @@ class TermNode
     
     return $this->_languageTermIds[$languageCode];
   }
+  
+  /**
+   * Returns the array with all language term ids
+   * 
+   * @return array
+   */
+  public function getLanguageTermData()
+  {
+    return $this->_languageTermIds;
+  }
 }
