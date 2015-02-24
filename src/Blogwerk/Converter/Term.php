@@ -585,6 +585,10 @@ class Term
    */
   protected function _convertPosts($taxonomy, $tree)
   {
+    if (!is_array($tree)) {
+      return;
+    }
+    
     foreach ($tree as $node) {
       $postIds = $this->_getPostsForTermId($taxonomy, $node->getTermData()->term_id);
       

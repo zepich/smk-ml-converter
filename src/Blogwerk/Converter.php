@@ -147,7 +147,8 @@ class Converter
           . PHP_EOL
           . '  1. Download WordPress and extract the content of WordPress package to a directory.' . PHP_EOL
           . '  2. Create manually a wp-config.php file and insert the required data to connect to the database.' . PHP_EOL
-          . '  3. Reset the admin password with this tool Use the following command: "php converter.php ' . CliCore::MODE_RESET . '"' . PHP_EOL;
+          . '  3. Reset the admin password. To do this use the following command: ' . PHP_EOL . '      "php converter.php -c ' 
+          . $this->_cliCore->getConfigurationFilePath() . ' ' . CliCore::MODE_RESET . '"' . PHP_EOL;
           
     Output::output($text, 'notice');
   }
@@ -236,13 +237,14 @@ class Converter
     Output::outputLine();
     
     // Output the howto text
-    $text = 'The password is reset for the admin user and you should now be able to login as admin. Please execute this steps manually:' . PHP_EOL
+    $text = 'The password is reset for the admin user and you should now be able to login as admin. Please execute these steps manually:' . PHP_EOL
           . PHP_EOL
           . '  1. Download Polylang from the WordPress plugin repository.' . PHP_EOL
           . '  2. Extract the content of the Polylang plugin to the WordPress plugins directory.' . PHP_EOL
           . '  3. Login to WordPress and activate Polylang.' . PHP_EOL
           . '  4. Configure the languages in the backend of WordPress. Please add all required languages.' . PHP_EOL
-          . '  5. Execute this tool again with the following command "php convert.php ' . CliCore::MODE_CONVERT . '"' . PHP_EOL;
+          . '  5. Execute this tool again with the following command ' . PHP_EOL . '      "php convert.php -c ' 
+          . $this->_cliCore->getConfigurationFilePath() . ' ' . CliCore::MODE_CONVERT . '"' . PHP_EOL;
           
     Output::output($text, 'notice');
   }
