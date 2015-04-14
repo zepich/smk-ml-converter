@@ -182,6 +182,7 @@ class Converter
     
     // Load WordPress
     Output::output('Load WordPress...', 'info');
+    global $table_prefix; // this is needed: we are not in global scope, wp assumes that we are for this variable (see wp-settings.php:82)
     include_once($path . '/wp-load.php');
     
     // Verify the installation
